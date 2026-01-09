@@ -196,18 +196,21 @@ class LabelGeneratorApp:
             try:
                 font_brand = ImageFont.truetype("arialbd.ttf", 56)  # Bold font
                 font_text = ImageFont.truetype("arialbd.ttf", 34)  # Bold for emphasis
-                font_small = ImageFont.truetype("arial.ttf", 24)  # Increased from 22
+                font_small = ImageFont.truetype("arialbd.ttf", 30)  # Bold and larger for static text
+                font_small_en = ImageFont.truetype("arialbd.ttf", 22)  # Smaller bold for English
                 font_footer = ImageFont.truetype("arial.ttf", 20)  # Compact footer
             except:
                 try:
                     font_brand = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 56)  # Bold font
                     font_text = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 34)  # Bold
-                    font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 24)
+                    font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 30)  # Bold and larger
+                    font_small_en = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 22)  # Smaller bold for English
                     font_footer = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 20)
                 except:
                     font_brand = ImageFont.load_default()
                     font_text = ImageFont.load_default()
                     font_small = ImageFont.load_default()
+                    font_small_en = ImageFont.load_default()
                     font_footer = ImageFont.load_default()
             
             # List to store all label images
@@ -282,9 +285,9 @@ class LabelGeneratorApp:
                             # Fallback without reshaping
                             draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
                     else:
-                        # English text - left aligned
-                        draw.text((50, y), line, font=font_small, fill="black")
-                    y += 27  # Adjusted spacing for new height
+                        # English text - left aligned with smaller font
+                        draw.text((50, y), line, font=font_small_en, fill="black")
+                    y += 32  # Adjusted spacing for larger bold font
                 
                 # Footer
                 y += 13  # Adjusted spacing
