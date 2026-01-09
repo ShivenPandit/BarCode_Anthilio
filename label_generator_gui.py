@@ -8,6 +8,13 @@ from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 import tempfile
 
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    ARABIC_SUPPORT = True
+except ImportError:
+    ARABIC_SUPPORT = False
+
 class LabelGeneratorApp:
     def __init__(self, root):
         self.root = root
@@ -187,18 +194,24 @@ class LabelGeneratorApp:
             
             # Try to load a font (fallback to default if not found)
             try:
-                font_brand = ImageFont.truetype("arialbd.ttf", 48)  # Bold font
-                font_text = ImageFont.truetype("arial.ttf", 26)
-                font_small = ImageFont.truetype("arial.ttf", 20)
+                font_brand = ImageFont.truetype("arialbd.ttf", 56)  # Bold font
+                font_text = ImageFont.truetype("arialbd.ttf", 34)  # Bold for emphasis
+                font_small = ImageFont.truetype("arial.ttf", 24)  # Increased from 22
+                font_footer = ImageFont.truetype("arial.ttf", 20)  # Compact footer
             except:
                 try:
-                    font_brand = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 48)  # Bold font
-                    font_text = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 26)
-                    font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 20)
+                    font_brand = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 56)  # Bold font
+                    font_text = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 34)  # Bold
+                    font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 24)
+                    font_footer = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 20)
                 except:
                     font_brand = ImageFont.load_default()
                     font_text = ImageFont.load_default()
                     font_small = ImageFont.load_default()
+                    font_footer = ImageFont.load_default()
+            
+            # List to store all label images
+            all_labels = []
             
             # Process each row
             for i, row in df.iterrows():
@@ -207,25 +220,26 @@ class LabelGeneratorApp:
                 self.progress["value"] = i + 1
                 self.root.update()
                 
-                img = Image.new("RGB", (600, 900), "white")
+                # 50.8mm x 81.3mm at 300 DPI
+                img = Image.new("RGB", (600, 960), "white")
                 draw = ImageDraw.Draw(img)
                 
-                y = 20
+                y = 15  # Reduced from 20
                 
                 # Brand logo
                 try:
                     logo_path = os.path.join(os.path.dirname(__file__), "Stylilogo.jpeg")
                     logo = Image.open(logo_path)
                     # Resize logo to fit nicely (adjust size as needed)
-                    logo = logo.resize((200, 60), Image.Resampling.LANCZOS)
+                    logo = logo.resize((250, 75), Image.Resampling.LANCZOS)
                     # Center the logo
                     logo_x = (600 - logo.width) // 2
                     img.paste(logo, (logo_x, y), logo if logo.mode == 'RGBA' else None)
-                    y += 80
+                    y += 105  # Increased spacing for better separation
                 except:
                     # Fallback to text if logo not found
-                    draw.text((240, y), "styli", font=font_brand, fill="black")
-                    y += 80
+                    draw.text((245, y), "styli", font=font_brand, fill="black")
+                    y += 105
                 
                 # Dynamic fields
                 fields = [
@@ -238,7 +252,7 @@ class LabelGeneratorApp:
                 
                 for f in fields:
                     draw.text((300, y), f, font=font_text, fill="black", anchor="mm")
-                    y += 35
+                    y += 43  # Slightly increased spacing
                 
                 # Barcode
                 barcode_value = str(row["BARCODE"])
@@ -249,38 +263,49 @@ class LabelGeneratorApp:
                     barcode_path = os.path.join(tmpdir, f"bar_{i}")
                     code128.save(barcode_path)
                     
-                    barcode_img = Image.open(barcode_path + ".png").resize((450, 120))
-                    img.paste(barcode_img, (75, y + 10))
+                    barcode_img = Image.open(barcode_path + ".png").resize((490, 140))
+                    img.paste(barcode_img, (55, y + 10))
                 
-                y += 150
+                y += 165  # Adjusted spacing
                 
                 # Static text
                 for line in STATIC_TEXT:
                     # Right-align Arabic text, left-align English text
                     if line.strip() and any('\u0600' <= c <= '\u06FF' for c in line):
                         # Arabic text - right aligned
-                        draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
+                        if ARABIC_SUPPORT:
+                            # Reshape and apply bidi algorithm for proper Arabic rendering
+                            reshaped_text = arabic_reshaper.reshape(line)
+                            bidi_text = get_display(reshaped_text)
+                            draw.text((550, y), bidi_text, font=font_small, fill="black", anchor="ra")
+                        else:
+                            # Fallback without reshaping
+                            draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
                     else:
                         # English text - left aligned
                         draw.text((50, y), line, font=font_small, fill="black")
-                    y += 22
+                    y += 27  # Adjusted spacing for new height
                 
                 # Footer
-                y += 10
-                draw.text((230, y), "Follow us", font=font_small, fill="black")
-                y += 22
+                y += 13  # Adjusted spacing
+                draw.text((230, y), "Follow us", font=font_footer, fill="black")
+                y += 24  # Adjusted spacing
                 draw.text((150, y), "@styliofficial      @styli_official", 
-                         font=font_small, fill="black")
+                         font=font_footer, fill="black")
                 
-                # Save
-                output_path = os.path.join(self.output_dir, f"label_{i+1}.png")
-                img.save(output_path)
+                # Add to list
+                all_labels.append(img.copy())
+            
+            # Save all labels to a single PDF
+            if all_labels:
+                pdf_path = os.path.join(self.output_dir, "labels.pdf")
+                all_labels[0].save(pdf_path, save_all=True, append_images=all_labels[1:], resolution=300.0)
             
             # Success
-            self.status_label.config(text=f"Success! Generated {total_rows} labels", 
+            self.status_label.config(text=f"Success! Generated {total_rows} labels in PDF", 
                                     fg="#4CAF50")
             messagebox.showinfo("Success", 
-                f"Successfully generated {total_rows} labels!\n\nSaved to: {self.output_dir}")
+                f"Successfully generated {total_rows} labels!\n\nSaved to: {os.path.join(self.output_dir, 'labels.pdf')}")
             
         except Exception as e:
             self.status_label.config(text=f"Error: {str(e)}", fg="#f44336")
