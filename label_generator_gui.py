@@ -187,12 +187,12 @@ class LabelGeneratorApp:
             
             # Try to load a font (fallback to default if not found)
             try:
-                font_brand = ImageFont.truetype("arial.ttf", 48)
+                font_brand = ImageFont.truetype("arialbd.ttf", 48)  # Bold font
                 font_text = ImageFont.truetype("arial.ttf", 26)
                 font_small = ImageFont.truetype("arial.ttf", 20)
             except:
                 try:
-                    font_brand = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 48)
+                    font_brand = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 48)  # Bold font
                     font_text = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 26)
                     font_small = ImageFont.truetype("C:\\Windows\\Fonts\\arial.ttf", 20)
                 except:
@@ -212,9 +212,20 @@ class LabelGeneratorApp:
                 
                 y = 20
                 
-                # Brand
-                draw.text((240, y), "styli", font=font_brand, fill="black")
-                y += 80
+                # Brand logo
+                try:
+                    logo_path = os.path.join(os.path.dirname(__file__), "Stylilogo.jpeg")
+                    logo = Image.open(logo_path)
+                    # Resize logo to fit nicely (adjust size as needed)
+                    logo = logo.resize((200, 60), Image.Resampling.LANCZOS)
+                    # Center the logo
+                    logo_x = (600 - logo.width) // 2
+                    img.paste(logo, (logo_x, y), logo if logo.mode == 'RGBA' else None)
+                    y += 80
+                except:
+                    # Fallback to text if logo not found
+                    draw.text((240, y), "styli", font=font_brand, fill="black")
+                    y += 80
                 
                 # Dynamic fields
                 fields = [
@@ -226,7 +237,7 @@ class LabelGeneratorApp:
                 ]
                 
                 for f in fields:
-                    draw.text((50, y), f, font=font_text, fill="black")
+                    draw.text((300, y), f, font=font_text, fill="black", anchor="mm")
                     y += 35
                 
                 # Barcode
@@ -243,13 +254,15 @@ class LabelGeneratorApp:
                 
                 y += 150
                 
-                # Barcode number
-                draw.text((200, y), barcode_value, font=font_text, fill="black")
-                y += 40
-                
                 # Static text
                 for line in STATIC_TEXT:
-                    draw.text((50, y), line, font=font_small, fill="black")
+                    # Right-align Arabic text, left-align English text
+                    if line.strip() and any('\u0600' <= c <= '\u06FF' for c in line):
+                        # Arabic text - right aligned
+                        draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
+                    else:
+                        # English text - left aligned
+                        draw.text((50, y), line, font=font_small, fill="black")
                     y += 22
                 
                 # Footer
