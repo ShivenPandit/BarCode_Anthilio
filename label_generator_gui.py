@@ -126,7 +126,8 @@ class LabelGeneratorApp:
                 'STYLI OPTION ID': 'REF',
                 'SIZE': 'SIZE',
                 'VENDOR STYLE NUMBER': 'STYLE_CODE',
-                'STYLI SKU': 'BARCODE'
+                'STYLI SKU': 'BARCODE',
+                'TOTAL': 'TOTAL'
             }
             
             df = None
@@ -188,9 +189,17 @@ class LabelGeneratorApp:
                 "ص.ب رقم 25030 دبي، الإمارات العربية المتحدة"
             ]
             
+            # Calculate total labels to generate (sum of all quantities)
+            total_labels = 0
+            for _, row in df.iterrows():
+                try:
+                    qty = int(row.get('TOTAL', 1))
+                    total_labels += qty if qty > 0 else 1
+                except (ValueError, TypeError):
+                    total_labels += 1
+            
             # Setup progress bar
-            total_rows = len(df)
-            self.progress["maximum"] = total_rows
+            self.progress["maximum"] = total_labels
             
             # Try to load a font (fallback to default if not found)
             try:
@@ -215,89 +224,101 @@ class LabelGeneratorApp:
             
             # List to store all label images
             all_labels = []
+            label_counter = 0
             
             # Process each row
             for i, row in df.iterrows():
-                self.status_label.config(text=f"Generating label {i+1} of {total_rows}...", 
-                                        fg="#2196F3")
-                self.progress["value"] = i + 1
-                self.root.update()
-                
-                # 50.8mm x 81.3mm at 300 DPI
-                img = Image.new("RGB", (600, 960), "white")
-                draw = ImageDraw.Draw(img)
-                
-                y = 15  # Reduced from 20
-                
-                # Brand logo
+                # Get quantity from TOTAL column
                 try:
-                    logo_path = os.path.join(os.path.dirname(__file__), "Stylilogo.jpeg")
-                    logo = Image.open(logo_path)
-                    # Resize logo to fit nicely (adjust size as needed)
-                    logo = logo.resize((250, 75), Image.Resampling.LANCZOS)
-                    # Center the logo
-                    logo_x = (600 - logo.width) // 2
-                    img.paste(logo, (logo_x, y), logo if logo.mode == 'RGBA' else None)
-                    y += 105  # Increased spacing for better separation
-                except:
-                    # Fallback to text if logo not found
-                    draw.text((245, y), "styli", font=font_brand, fill="black")
-                    y += 105
+                    quantity = int(row.get('TOTAL', 1))
+                    if quantity <= 0:
+                        quantity = 1
+                except (ValueError, TypeError):
+                    quantity = 1
                 
-                # Dynamic fields
-                fields = [
-                    f"Po No. : {row['PO_NO']}",
-                    f"Model : {row['MODEL']}",
-                    f"Ref. : {row['REF']}",
-                    f"Size. : {row['SIZE']}",
-                    f"Style code. : {row['STYLE_CODE']}",
-                ]
-                
-                for f in fields:
-                    draw.text((300, y), f, font=font_text, fill="black", anchor="mm")
-                    y += 43  # Slightly increased spacing
-                
-                # Barcode
-                barcode_value = str(row["BARCODE"])
-                code128 = barcode.get("code128", barcode_value, writer=ImageWriter())
-                
-                # Use temp directory for barcode
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    barcode_path = os.path.join(tmpdir, f"bar_{i}")
-                    code128.save(barcode_path)
+                # Generate 'quantity' number of labels for this row
+                for copy_num in range(quantity):
+                    label_counter += 1
+                    self.status_label.config(text=f"Generating label {label_counter} of {total_labels} (Row {i+1}, Copy {copy_num+1}/{quantity})...", 
+                                            fg="#2196F3")
+                    self.progress["value"] = label_counter
+                    self.root.update()
                     
-                    barcode_img = Image.open(barcode_path + ".png").resize((490, 140))
-                    img.paste(barcode_img, (55, y + 10))
-                
-                y += 165  # Adjusted spacing
-                
-                # Static text
-                for line in STATIC_TEXT:
-                    # Right-align Arabic text, left-align English text
-                    if line.strip() and any('\u0600' <= c <= '\u06FF' for c in line):
-                        # Arabic text - right aligned
-                        if ARABIC_SUPPORT:
-                            # Reshape and apply bidi algorithm for proper Arabic rendering
-                            reshaped_text = arabic_reshaper.reshape(line)
-                            bidi_text = get_display(reshaped_text)
-                            draw.text((550, y), bidi_text, font=font_small, fill="black", anchor="ra")
+                    # 50.8mm x 81.3mm at 300 DPI
+                    img = Image.new("RGB", (600, 960), "white")
+                    draw = ImageDraw.Draw(img)
+                    
+                    y = 15  # Reduced from 20
+                    
+                    # Brand logo
+                    try:
+                        logo_path = os.path.join(os.path.dirname(__file__), "Stylilogo.jpeg")
+                        logo = Image.open(logo_path)
+                        # Resize logo to fit nicely (adjust size as needed)
+                        logo = logo.resize((250, 75), Image.Resampling.LANCZOS)
+                        # Center the logo
+                        logo_x = (600 - logo.width) // 2
+                        img.paste(logo, (logo_x, y), logo if logo.mode == 'RGBA' else None)
+                        y += 105  # Increased spacing for better separation
+                    except:
+                        # Fallback to text if logo not found
+                        draw.text((245, y), "styli", font=font_brand, fill="black")
+                        y += 105
+                    
+                    # Dynamic fields
+                    fields = [
+                        f"Po No. : {row['PO_NO']}",
+                        f"Model : {row['MODEL']}",
+                        f"Ref. : {row['REF']}",
+                        f"Size. : {row['SIZE']}",
+                        f"Style code. : {row['STYLE_CODE']}",
+                    ]
+                    
+                    for f in fields:
+                        draw.text((300, y), f, font=font_text, fill="black", anchor="mm")
+                        y += 43  # Slightly increased spacing
+                    
+                    # Barcode
+                    barcode_value = str(row["BARCODE"])
+                    code128 = barcode.get("code128", barcode_value, writer=ImageWriter())
+                    
+                    # Use temp directory for barcode
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        barcode_path = os.path.join(tmpdir, f"bar_{label_counter}")
+                        code128.save(barcode_path)
+                        
+                        barcode_img = Image.open(barcode_path + ".png").resize((490, 140))
+                        img.paste(barcode_img, (55, y + 10))
+                    
+                    y += 165  # Adjusted spacing
+                    
+                    # Static text
+                    for line in STATIC_TEXT:
+                        # Right-align Arabic text, left-align English text
+                        if line.strip() and any('\u0600' <= c <= '\u06FF' for c in line):
+                            # Arabic text - right aligned
+                            if ARABIC_SUPPORT:
+                                # Reshape and apply bidi algorithm for proper Arabic rendering
+                                reshaped_text = arabic_reshaper.reshape(line)
+                                bidi_text = get_display(reshaped_text)
+                                draw.text((550, y), bidi_text, font=font_small, fill="black", anchor="ra")
+                            else:
+                                # Fallback without reshaping
+                                draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
                         else:
-                            # Fallback without reshaping
-                            draw.text((550, y), line, font=font_small, fill="black", anchor="ra")
-                    else:
-                        # English text - left aligned with smaller font
-                        draw.text((50, y), line, font=font_small_en, fill="black")
-                    y += 32  # Adjusted spacing for larger bold font
-                
-                # Footer
-                y += 13  # Adjusted spacing
-                draw.text((230, y), "Follow us", font=font_footer, fill="black")
-                y += 24  # Adjusted spacing
-                draw.text((150, y), "@styliofficial      @styli_official", 
-                         font=font_footer, fill="black")
-                
-                # Add to list
-                all_labels.append(img.copy())
+                            # English text - left aligned with smaller font
+                            draw.text((50, y), line, font=font_small_en, fill="black")
+                        y += 32  # Adjusted spacing for larger bold font
+                    
+                    # Footer
+                    y += 13  # Adjusted spacing
+                    draw.text((230, y), "Follow us", font=font_footer, fill="black")
+                    y += 24  # Adjusted spacing
+                    draw.text((150, y), "@styliofficial      @styli_official", 
+                             font=font_footer, fill="black")
+                    
+                    # Add to list
+                    all_labels.append(img.copy())
             
             # Save all labels to a single PDF
             if all_labels:
@@ -305,10 +326,10 @@ class LabelGeneratorApp:
                 all_labels[0].save(pdf_path, save_all=True, append_images=all_labels[1:], resolution=300.0)
             
             # Success
-            self.status_label.config(text=f"Success! Generated {total_rows} labels in PDF", 
+            self.status_label.config(text=f"Success! Generated {label_counter} labels in PDF", 
                                     fg="#4CAF50")
             messagebox.showinfo("Success", 
-                f"Successfully generated {total_rows} labels!\n\nSaved to: {os.path.join(self.output_dir, 'labels.pdf')}")
+                f"Successfully generated {label_counter} labels from {len(df)} rows!\n\nSaved to: {os.path.join(self.output_dir, 'labels.pdf')}")
             
         except Exception as e:
             self.status_label.config(text=f"Error: {str(e)}", fg="#f44336")

@@ -33,7 +33,8 @@ required_columns = {
     "REF",
     "SIZE",
     "STYLE_CODE",
-    "BARCODE"
+    "BARCODE",
+    "TOTAL"
 }
 
 missing = required_columns - set(df.columns)
@@ -56,64 +57,76 @@ STATIC_TEXT = [
 ]
 
 # ================== GENERATE LABELS ==================
+label_counter = 0
+
 for i, row in df.iterrows():
+    # Get quantity from TOTAL column
+    try:
+        quantity = int(row['TOTAL'])
+    except (ValueError, TypeError):
+        print(f"Warning: Invalid quantity in row {i+1}, defaulting to 1")
+        quantity = 1
+    
+    # Generate 'quantity' number of labels for this row
+    for copy_num in range(quantity):
+        label_counter += 1
+        
+        img = Image.new("RGB", (600, 900), "white")
+        draw = ImageDraw.Draw(img)
 
-    img = Image.new("RGB", (600, 900), "white")
-    draw = ImageDraw.Draw(img)
+        font_brand = ImageFont.truetype(FONT_PATH, 48)
+        font_text = ImageFont.truetype(FONT_PATH, 26)
+        font_small = ImageFont.truetype(FONT_PATH, 20)
 
-    font_brand = ImageFont.truetype(FONT_PATH, 48)
-    font_text = ImageFont.truetype(FONT_PATH, 26)
-    font_small = ImageFont.truetype(FONT_PATH, 20)
+        y = 20
 
-    y = 20
+        # Brand
+        draw.text((240, y), "styli", font=font_brand, fill="black")
+        y += 80
 
-    # Brand
-    draw.text((240, y), "styli", font=font_brand, fill="black")
-    y += 80
+        # Dynamic fields
+        fields = [
+            f"Po No. : {row['PO_NO']}",
+            f"Model : {row['MODEL']}",
+            f"Ref. : {row['REF']}",
+            f"Size. : {row['SIZE']}",
+            f"Style code. : {row['STYLE_CODE']}",
+        ]
 
-    # Dynamic fields
-    fields = [
-        f"Po No. : {row['PO_NO']}",
-        f"Model : {row['MODEL']}",
-        f"Ref. : {row['REF']}",
-        f"Size. : {row['SIZE']}",
-        f"Style code. : {row['STYLE_CODE']}",
-    ]
+        for line in fields:
+            draw.text((50, y), line, font=font_text, fill="black")
+            y += 35
 
-    for line in fields:
-        draw.text((50, y), line, font=font_text, fill="black")
-        y += 35
+        # Barcode
+        barcode_value = str(row["BARCODE"]).strip()
 
-    # Barcode
-    barcode_value = str(row["BARCODE"]).strip()
+        code128 = barcode.get("code128", barcode_value, writer=ImageWriter())
+        barcode_path = os.path.join(OUTPUT_DIR, f"barcode_{label_counter}")
+        code128.save(barcode_path)
 
-    code128 = barcode.get("code128", barcode_value, writer=ImageWriter())
-    barcode_path = os.path.join(OUTPUT_DIR, f"barcode_{i}")
-    code128.save(barcode_path)
+        barcode_img = Image.open(barcode_path + ".png").resize((450, 120))
+        img.paste(barcode_img, (75, y + 10))
+        y += 150
 
-    barcode_img = Image.open(barcode_path + ".png").resize((450, 120))
-    img.paste(barcode_img, (75, y + 10))
-    y += 150
+        # Barcode number
+        draw.text((200, y), barcode_value, font=font_text, fill="black")
+        y += 40
 
-    # Barcode number
-    draw.text((200, y), barcode_value, font=font_text, fill="black")
-    y += 40
+        # Static text
+        for line in STATIC_TEXT:
+            draw.text((50, y), line, font=font_small, fill="black")
+            y += 22
 
-    # Static text
-    for line in STATIC_TEXT:
-        draw.text((50, y), line, font=font_small, fill="black")
+        # Footer
+        y += 10
+        draw.text((230, y), "Follow us", font=font_small, fill="black")
         y += 22
+        draw.text((150, y), "@styliofficial      @styli_official", font=font_small, fill="black")
 
-    # Footer
-    y += 10
-    draw.text((230, y), "Follow us", font=font_small, fill="black")
-    y += 22
-    draw.text((150, y), "@styliofficial      @styli_official", font=font_small, fill="black")
+        # Save label
+        output_path = os.path.join(OUTPUT_DIR, f"label_{label_counter}.png")
+        img.save(output_path)
 
-    # Save label
-    output_path = os.path.join(OUTPUT_DIR, f"label_{i + 1}.png")
-    img.save(output_path)
-
-    print("Saved:", output_path)
+        print(f"Saved: {output_path} (Row {i+1}, Copy {copy_num+1}/{quantity})")
 
 print("✅ ALL LABELS GENERATED SUCCESSFULLY")
